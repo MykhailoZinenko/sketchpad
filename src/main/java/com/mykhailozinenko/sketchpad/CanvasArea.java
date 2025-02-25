@@ -21,7 +21,6 @@ public class CanvasArea extends StackPane {
     private GraphicsContext gc;
     private ScrollPane scrollPane;
     private Pane canvasContainer;
-    private Pane centeringPane;
     private double lastX;
     private double lastY;
     private boolean isDrawing = false;
@@ -60,20 +59,8 @@ public class CanvasArea extends StackPane {
         canvasContainer.setMinSize(canvas.getWidth(), canvas.getHeight());
         canvasContainer.setMaxSize(canvas.getWidth(), canvas.getHeight());
 
-        // Create a pane that will center the canvas container and add padding
-        centeringPane = new Pane();
-        centeringPane.setPadding(new Insets(30, 0, 30, 0)); // Add top and bottom padding
-        centeringPane.setBackground(new Background(new BackgroundFill(Color.LIGHTGRAY, CornerRadii.EMPTY, Insets.EMPTY)));
-        centeringPane.getChildren().add(canvasContainer);
-
-        // Position the canvas container in the center of the pane
-        canvasContainer.layoutXProperty().bind(
-                centeringPane.widthProperty().subtract(canvasContainer.widthProperty()).divide(2));
-        canvasContainer.layoutYProperty().bind(
-                centeringPane.heightProperty().subtract(canvasContainer.heightProperty()).divide(2));
-
         // Create a scroll pane to handle scrolling
-        scrollPane = new ScrollPane(centeringPane);
+        scrollPane = new ScrollPane(canvasContainer);
         scrollPane.setPannable(true); // Allow panning with mouse drag
         scrollPane.setFitToWidth(true);
         scrollPane.setFitToHeight(true);
@@ -159,9 +146,6 @@ public class CanvasArea extends StackPane {
         Point2D scrollOffset = calculateScrollOffset(mousePoint, oldZoom, zoomFactor);
         scrollPane.setHvalue(scrollH + scrollOffset.getX());
         scrollPane.setVvalue(scrollV + scrollOffset.getY());
-
-        // Notify any listeners that zoom has changed
-        fireEvent(new ZoomEvent(zoomFactor));
     }
 
     /**
@@ -310,22 +294,5 @@ public class CanvasArea extends StackPane {
 
         // Render the project content
         renderProjectContent();
-    }
-
-    // Custom event class for zoom changes
-    public static class ZoomEvent extends javafx.event.Event {
-        public static final javafx.event.EventType<ZoomEvent> ZOOM_CHANGED =
-                new javafx.event.EventType<>(javafx.event.Event.ANY, "ZOOM_CHANGED");
-
-        private final double zoomFactor;
-
-        public ZoomEvent(double zoomFactor) {
-            super(ZOOM_CHANGED);
-            this.zoomFactor = zoomFactor;
-        }
-
-        public double getZoomFactor() {
-            return zoomFactor;
-        }
     }
 }

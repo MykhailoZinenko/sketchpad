@@ -67,11 +67,6 @@ public class ZoomControl extends HBox {
         // Add all elements to the layout
         getChildren().addAll(zoomOutButton, zoomLabel, zoomInButton, resetZoomButton);
 
-        // Add event listener for zoom changes in the canvas
-        canvasArea.addEventHandler(CanvasArea.ZoomEvent.ZOOM_CHANGED, e -> {
-            updateZoomLabel();
-        });
-
         // Initial update of the zoom label
         updateZoomLabel();
     }
