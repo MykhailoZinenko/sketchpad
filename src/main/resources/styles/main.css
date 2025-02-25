@@ -28,7 +28,7 @@
 
 /* Canvas area styling */
 .canvas-area {
-    -fx-background-color: white;
+    -fx-background-color: #e0e0e0;
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0, 0, 2);
 }
 
@@ -37,4 +37,21 @@
     -fx-background-color: #e0e0e0;
     -fx-border-color: #cccccc;
     -fx-border-width: 0 0 1 0;
+    -fx-padding: 8px;
+}
+
+/* ComboBox styling */
+.combo-box {
+    -fx-background-color: white;
+    -fx-border-color: #cccccc;
+    -fx-border-radius: 3;
+}
+
+.combo-box .list-cell {
+    -fx-padding: 3 6;
+}
+
+/* Separator styling */
+.separator {
+    -fx-padding: 0 10;
 }

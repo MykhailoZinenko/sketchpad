@@ -45,6 +45,12 @@ public class SketchPadApplication extends Application {
 
         toolBar.getClearButton().setOnAction(e -> canvasArea.clear());
 
+        // Connect paper size selection to canvas
+        toolBar.getPaperSizeComboBox().setOnAction(e -> {
+            PaperSize selectedSize = toolBar.getPaperSizeComboBox().getValue();
+            canvasArea.setPaperSize(selectedSize);
+        });
+
         // Create scene and set stylesheet
         Scene scene = new Scene(root, DEFAULT_WIDTH, DEFAULT_HEIGHT);
         scene.getStylesheets().add(getClass().getResource("/styles/main.css").toExternalForm());
