@@ -1,47 +1,85 @@
 package com.mykhailozinenko.sketchpad;
 
 import javafx.geometry.Insets;
+import javafx.geometry.Point2D;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.CornerRadii;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
-import javafx.scene.shape.Rectangle;
+import javafx.scene.transform.Scale;
 
 public class CanvasArea extends StackPane {
 
     private Canvas canvas;
     private GraphicsContext gc;
-    private Rectangle clipRect;
+    private ScrollPane scrollPane;
+    private Pane canvasContainer;
+    private Pane centeringPane;
     private double lastX;
     private double lastY;
     private boolean isDrawing = false;
-    private PaperSize currentPaperSize = PaperSize.A4; // Default to A4
+    private Project currentProject;
 
     // Default brush settings
     private BrushSettings brushSettings = new BrushSettings(Color.BLACK, 2.0);
 
-    public CanvasArea() {
+    // Zoom properties
+    private double zoomFactor = 1.0;
+    private static final double MIN_ZOOM = 0.25;
+    private static final double MAX_ZOOM = 4.0;
+    private static final double ZOOM_DELTA = 0.1;
+
+    public CanvasArea(Project project) {
+        this.currentProject = project;
         initialize();
     }
 
     private void initialize() {
         // Set padding and background
-        setPadding(new Insets(20));
+        setPadding(new Insets(0));
         setBackground(new Background(new BackgroundFill(Color.LIGHTGRAY, CornerRadii.EMPTY, Insets.EMPTY)));
 
-        // Create canvas with initial paper size
-        canvas = new Canvas(currentPaperSize.getWidthInPixels(), currentPaperSize.getHeightInPixels());
+        // Create canvas with project's paper size
+        PaperSize paperSize = currentProject.getPaperSize();
+        canvas = new Canvas(paperSize.getWidthInPixels(), paperSize.getHeightInPixels());
 
-        // Apply white background to canvas
-        clipRect = new Rectangle(canvas.getWidth(), canvas.getHeight());
-        clipRect.setFill(Color.WHITE);
+        // Create a container for the canvas that we can apply transforms to
+        canvasContainer = new Pane();
+        canvasContainer.getChildren().add(canvas);
+        canvasContainer.setBackground(new Background(new BackgroundFill(Color.WHITE, CornerRadii.EMPTY, Insets.EMPTY)));
 
-        // Add clipping rectangle and canvas to this pane
-        getChildren().addAll(clipRect, canvas);
+        // The container should be exactly the size of the canvas
+        canvasContainer.setPrefSize(canvas.getWidth(), canvas.getHeight());
+        canvasContainer.setMinSize(canvas.getWidth(), canvas.getHeight());
+        canvasContainer.setMaxSize(canvas.getWidth(), canvas.getHeight());
+
+        // Create a pane that will center the canvas container and add padding
+        centeringPane = new Pane();
+        centeringPane.setPadding(new Insets(30, 0, 30, 0)); // Add top and bottom padding
+        centeringPane.setBackground(new Background(new BackgroundFill(Color.LIGHTGRAY, CornerRadii.EMPTY, Insets.EMPTY)));
+        centeringPane.getChildren().add(canvasContainer);
+
+        // Position the canvas container in the center of the pane
+        canvasContainer.layoutXProperty().bind(
+                centeringPane.widthProperty().subtract(canvasContainer.widthProperty()).divide(2));
+        canvasContainer.layoutYProperty().bind(
+                centeringPane.heightProperty().subtract(canvasContainer.heightProperty()).divide(2));
+
+        // Create a scroll pane to handle scrolling
+        scrollPane = new ScrollPane(centeringPane);
+        scrollPane.setPannable(true); // Allow panning with mouse drag
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+
+        // Add the scroll pane to this stack pane
+        getChildren().add(scrollPane);
 
         // Get the graphics context for drawing
         gc = canvas.getGraphicsContext2D();
@@ -54,121 +92,186 @@ public class CanvasArea extends StackPane {
         // Handle mouse/stylus events for drawing
         setupInputHandlers();
 
-        // Handle resizing
-        widthProperty().addListener((obs, oldVal, newVal) -> centerCanvas());
-        heightProperty().addListener((obs, oldVal, newVal) -> centerCanvas());
+        // Render existing content if any
+        renderProjectContent();
     }
 
     /**
-     * Centers the canvas in the available space
+     * Renders the current project's content to the canvas
      */
-    private void centerCanvas() {
-        // No need to adjust canvas size here - it stays fixed to the paper size
-        // Just ensure it's centered in the available space
-        canvas.setLayoutX((getWidth() - canvas.getWidth()) / 2);
-        canvas.setLayoutY((getHeight() - canvas.getHeight()) / 2);
-
-        // Ensure the clip rectangle matches the canvas
-        clipRect.setWidth(canvas.getWidth());
-        clipRect.setHeight(canvas.getHeight());
-        clipRect.setLayoutX(canvas.getLayoutX());
-        clipRect.setLayoutY(canvas.getLayoutY());
-    }
-
-    /**
-     * Changes the paper size and adjusts the canvas accordingly
-     */
-    public void setPaperSize(PaperSize paperSize) {
-        this.currentPaperSize = paperSize;
-
-        // Save existing content
-        Color[][] pixels = captureCanvasContent();
-
-        // Resize canvas
-        canvas.setWidth(paperSize.getWidthInPixels());
-        canvas.setHeight(paperSize.getHeightInPixels());
-
-        // Reset canvas with white background
-        gc.setFill(Color.WHITE);
-        gc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
-
-        // Restore content as much as possible
-        restoreCanvasContent(pixels);
-
-        // Re-center in the container
-        centerCanvas();
-    }
-
-    /**
-     * Captures the current canvas content as a color matrix
-     */
-    private Color[][] captureCanvasContent() {
-        int width = (int) canvas.getWidth();
-        int height = (int) canvas.getHeight();
-        Color[][] result = new Color[width][height];
-
-        // This is slow but ensures we don't lose data when resizing
-        // A more efficient solution would be to use WritableImage
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                // This is a simplification - in reality, we'd need more complex image processing
-                // Using JavaFX's PixelReader would be more efficient
-                result[x][y] = Color.TRANSPARENT; // Placeholder
-            }
-        }
-        return result;
-    }
-
-    /**
-     * Restores canvas content from a color matrix
-     */
-    private void restoreCanvasContent(Color[][] pixels) {
-        int width = Math.min(pixels.length, (int) canvas.getWidth());
-        int height = Math.min(pixels[0].length, (int) canvas.getHeight());
-
-        // Again, this is a simplification
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                if (pixels[x][y] != null && pixels[x][y] != Color.TRANSPARENT) {
-                    // We would restore the pixel here
-                    // gc.getPixelWriter().setColor(x, y, pixels[x][y]);
-                }
-            }
+    private void renderProjectContent() {
+        if (currentProject != null) {
+            currentProject.getContent().render(canvas);
         }
     }
 
     private void setupInputHandlers() {
+        // Drawing handlers
         canvas.addEventHandler(MouseEvent.MOUSE_PRESSED, this::handleMousePressed);
         canvas.addEventHandler(MouseEvent.MOUSE_DRAGGED, this::handleMouseDragged);
         canvas.addEventHandler(MouseEvent.MOUSE_RELEASED, this::handleMouseReleased);
+
+        // Zoom handler (works on the scroll pane and propagates to canvas)
+        this.addEventHandler(ScrollEvent.SCROLL, event -> {
+            if (event.isControlDown()) { // Zoom only when Ctrl is pressed
+                double delta = event.getDeltaY() > 0 ? ZOOM_DELTA : -ZOOM_DELTA;
+                zoom(delta, new Point2D(event.getX(), event.getY()));
+                event.consume(); // Prevent the scroll pane from also scrolling
+            }
+        });
+
+        canvas.addEventHandler(MouseEvent.MOUSE_PRESSED, event -> {
+            scrollPane.setPannable(false);
+        });
+
+        canvas.addEventHandler(MouseEvent.MOUSE_RELEASED, event -> {
+            scrollPane.setPannable(true);
+        });
+    }
+
+    /**
+     * Apply zoom at the specified point
+     */
+    private void zoom(double delta, Point2D mousePoint) {
+        double oldZoom = zoomFactor;
+
+        // Calculate new zoom factor
+        zoomFactor += delta;
+        zoomFactor = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomFactor));
+
+        // If zoom didn't change (at min/max limits), exit
+        if (oldZoom == zoomFactor) return;
+
+        // Calculate scroll position
+        double scrollH = scrollPane.getHvalue();
+        double scrollV = scrollPane.getVvalue();
+
+        // Apply zoom transform to canvas container
+        Scale scale = new Scale();
+        scale.setX(zoomFactor);
+        scale.setY(zoomFactor);
+
+        // Update the container size to reflect the zoom
+        canvasContainer.setPrefSize(canvas.getWidth() * zoomFactor, canvas.getHeight() * zoomFactor);
+        canvasContainer.getTransforms().setAll(scale);
+
+        // Try to maintain the mouse position in the view as we zoom
+        Point2D scrollOffset = calculateScrollOffset(mousePoint, oldZoom, zoomFactor);
+        scrollPane.setHvalue(scrollH + scrollOffset.getX());
+        scrollPane.setVvalue(scrollV + scrollOffset.getY());
+
+        // Notify any listeners that zoom has changed
+        fireEvent(new ZoomEvent(zoomFactor));
+    }
+
+    /**
+     * Helper method to calculate scroll offset when zooming
+     */
+    private Point2D calculateScrollOffset(Point2D mousePoint, double oldZoom, double newZoom) {
+        double mousePosX = mousePoint.getX() / (canvas.getWidth() * oldZoom);
+        double mousePosY = mousePoint.getY() / (canvas.getHeight() * oldZoom);
+
+        double newX = mousePosX * (newZoom - oldZoom);
+        double newY = mousePosY * (newZoom - oldZoom);
+
+        return new Point2D(newX, newY);
+    }
+
+    /**
+     * Increases zoom by one step
+     */
+    public void zoomIn() {
+        // Zoom in towards the center
+        zoom(ZOOM_DELTA, new Point2D(getWidth() / 2, getHeight() / 2));
+    }
+
+    /**
+     * Decreases zoom by one step
+     */
+    public void zoomOut() {
+        // Zoom out from the center
+        zoom(-ZOOM_DELTA, new Point2D(getWidth() / 2, getHeight() / 2));
+    }
+
+    /**
+     * Resets zoom to 100%
+     */
+    public void resetZoom() {
+        // Get current zoom
+        double delta = 1.0 - zoomFactor;
+
+        // Apply zoom to return to 100%
+        zoom(delta, new Point2D(getWidth() / 2, getHeight() / 2));
+    }
+
+    /**
+     * Gets the current zoom factor
+     */
+    public double getZoomFactor() {
+        return zoomFactor;
     }
 
     private void handleMousePressed(MouseEvent event) {
-        lastX = event.getX();
-        lastY = event.getY();
+        // Convert screen coordinates to canvas coordinates (accounting for zoom)
+        Point2D canvasPoint = convertToCanvasPoint(event.getX(), event.getY());
+        lastX = canvasPoint.getX();
+        lastY = canvasPoint.getY();
+
         isDrawing = true;
 
-        // Mark the starting point
-        gc.beginPath();
-        gc.moveTo(lastX, lastY);
-        gc.stroke();
+        // Store initial point as a dot operation
+        DrawOperation.DotOperation dotOp = new DrawOperation.DotOperation(
+                lastX, lastY,
+                brushSettings.getColor(),
+                brushSettings.getSize()
+        );
+
+        // Add to project content
+        currentProject.addDrawOperation(dotOp);
+
+        // Draw immediately on canvas
+        dotOp.draw(gc);
     }
 
     private void handleMouseDragged(MouseEvent event) {
         if (!isDrawing) return;
 
-        double currentX = event.getX();
-        double currentY = event.getY();
+        // Convert screen coordinates to canvas coordinates (accounting for zoom)
+        Point2D canvasPoint = convertToCanvasPoint(event.getX(), event.getY());
+        double currentX = canvasPoint.getX();
+        double currentY = canvasPoint.getY();
 
-        // Draw line from last position to current position
-        gc.beginPath();
-        gc.moveTo(lastX, lastY);
-        gc.lineTo(currentX, currentY);
-        gc.stroke();
+        // Create a stroke operation
+        DrawOperation.StrokeOperation strokeOp = new DrawOperation.StrokeOperation(
+                lastX, lastY,
+                currentX, currentY,
+                brushSettings.getColor(),
+                brushSettings.getSize()
+        );
+
+        // Add to project content
+        currentProject.addDrawOperation(strokeOp);
+
+        // Draw immediately on canvas
+        strokeOp.draw(gc);
 
         // Update last position
         lastX = currentX;
         lastY = currentY;
+    }
+
+    /**
+     * Converts mouse coordinates to canvas coordinates
+     */
+    private Point2D convertToCanvasPoint(double screenX, double screenY) {
+        // First convert to container coordinates
+        Point2D containerPoint = canvas.sceneToLocal(
+                canvasContainer.localToScene(screenX, screenY));
+
+        // Return adjusted for zoom
+        return new Point2D(
+                containerPoint.getX(),
+                containerPoint.getY());
     }
 
     private void handleMouseReleased(MouseEvent event) {
@@ -176,6 +279,10 @@ public class CanvasArea extends StackPane {
     }
 
     public void clear() {
+        // Clear the project content
+        currentProject.clearContent();
+
+        // Clear the canvas visually
         gc.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
         gc.setFill(Color.WHITE);
         gc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
@@ -187,7 +294,38 @@ public class CanvasArea extends StackPane {
         gc.setLineWidth(settings.getSize());
     }
 
-    public PaperSize getCurrentPaperSize() {
-        return currentPaperSize;
+    /**
+     * Updates to show a different project
+     */
+    public void setProject(Project project) {
+        this.currentProject = project;
+
+        // Update canvas size to match the project's paper size
+        PaperSize paperSize = project.getPaperSize();
+        canvas.setWidth(paperSize.getWidthInPixels());
+        canvas.setHeight(paperSize.getHeightInPixels());
+
+        // Update the container size
+        canvasContainer.setPrefSize(canvas.getWidth() * zoomFactor, canvas.getHeight() * zoomFactor);
+
+        // Render the project content
+        renderProjectContent();
+    }
+
+    // Custom event class for zoom changes
+    public static class ZoomEvent extends javafx.event.Event {
+        public static final javafx.event.EventType<ZoomEvent> ZOOM_CHANGED =
+                new javafx.event.EventType<>(javafx.event.Event.ANY, "ZOOM_CHANGED");
+
+        private final double zoomFactor;
+
+        public ZoomEvent(double zoomFactor) {
+            super(ZOOM_CHANGED);
+            this.zoomFactor = zoomFactor;
+        }
+
+        public double getZoomFactor() {
+            return zoomFactor;
+        }
     }
 }

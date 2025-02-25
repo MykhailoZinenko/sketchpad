@@ -3,7 +3,6 @@ package com.mykhailozinenko.sketchpad;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.ColorPicker;
-import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Slider;
@@ -15,7 +14,6 @@ public class ToolBar extends HBox {
     private ColorPicker colorPicker;
     private Slider brushSizeSlider;
     private Button clearButton;
-    private ComboBox<PaperSize> paperSizeComboBox;
 
     public ToolBar() {
         initialize();
@@ -45,16 +43,6 @@ public class ToolBar extends HBox {
             System.out.println("Brush size: " + newVal);
         });
 
-        // Create paper size selector
-        Label paperLabel = new Label("Paper:");
-        paperSizeComboBox = new ComboBox<>();
-        paperSizeComboBox.getItems().addAll(PaperSize.getAllSizes());
-        paperSizeComboBox.setValue(PaperSize.A4); // Default to A4
-        paperSizeComboBox.setOnAction(e -> {
-            // This will be connected to the canvas later
-            System.out.println("Paper size selected: " + paperSizeComboBox.getValue());
-        });
-
         // Create clear button
         clearButton = new Button("Clear Canvas");
         clearButton.setOnAction(e -> {
@@ -66,16 +54,11 @@ public class ToolBar extends HBox {
         Separator sep1 = new Separator();
         sep1.setOrientation(javafx.geometry.Orientation.VERTICAL);
 
-        Separator sep2 = new Separator();
-        sep2.setOrientation(javafx.geometry.Orientation.VERTICAL);
-
         // Add all controls to the toolbar
         getChildren().addAll(
                 colorLabel, colorPicker,
                 sizeLabel, brushSizeSlider,
                 sep1,
-                paperLabel, paperSizeComboBox,
-                sep2,
                 clearButton
         );
     }
@@ -90,9 +73,5 @@ public class ToolBar extends HBox {
 
     public Button getClearButton() {
         return clearButton;
-    }
-
-    public ComboBox<PaperSize> getPaperSizeComboBox() {
-        return paperSizeComboBox;
     }
 }
